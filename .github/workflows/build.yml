@@ -10,6 +10,10 @@ on:
         description: "可选：本次构建备注（会写进 Release 说明）"
         required: false
         default: ""
+      only:
+        description: "调试用：只构建某个目标，例如 package/kernel/bpf-headers/compile（留空则完整编译）"
+        required: false
+        default: ""
   push:
     branches: [main]
     paths:
@@ -136,25 +140,48 @@ jobs:
       - name: 编译固件
         if: steps.up.outputs.skip != 'true'
         working-directory: openwrt
+        env:
+          ONLY: ${{ github.event.inputs.only }}
         run: |
           set -o pipefail
-          make -j"$(nproc)" 2>&1 | tee build.log
+          if [ -n "${ONLY:-}" ]; then
+            echo ">>> 只构建：$ONLY（调试模式，-j1 V=s）"
+            make -j1 V=s "$ONLY" 2>&1 | tee build.log
+          else
+            make -j"$(nproc)" 2>&1 | tee build.log
+          fi
+
+      - name: 失败诊断（打印包级日志）
+        if: failure() && steps.up.outputs.skip != 'true'
+        working-directory: openwrt
+        run: |
+          echo "===== logs 目录 ====="
+          find logs -name '*.txt' -type f 2>/dev/null | tail -n 40 || true
+          for f in $(find logs -name '*.txt' -type f 2>/dev/null); do
+            if grep -qiE 'error|not found|No such file|failed' "$f"; then
+              echo ""
+              echo "########## $f ##########"
+              tail -n 80 "$f"
+            fi
+          done
 
       - name: 上传编译日志（失败时）
         if: failure() && steps.up.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: build-log-${{ steps.up.outputs.short }}
-          path: openwrt/build.log
+          path: |
+            openwrt/build.log
+            openwrt/logs
           retention-days: 7
 
       - name: 校验产物（BTF / 包 / 镜像大小）
-        if: steps.up.outputs.skip != 'true'
+        if: steps.up.outputs.skip != 'true' && github.event.inputs.only == ''
         working-directory: openwrt
         run: bash ../scripts/verify-image.sh
 
       - name: 收集固件
-        if: steps.up.outputs.skip != 'true'
+        if: steps.up.outputs.skip != 'true' && github.event.inputs.only == ''
         run: |
           set -euo pipefail
           mkdir -p out
@@ -165,7 +192,7 @@ jobs:
           ls -lh out
 
       - name: 上传 Artifact
-        if: steps.up.outputs.skip != 'true'
+        if: steps.up.outputs.skip != 'true' && github.event.inputs.only == ''
         uses: actions/upload-artifact@v4
         with:
           name: ax1800pro-2g-daed-${{ steps.up.outputs.short }}
@@ -173,7 +200,7 @@ jobs:
           retention-days: 15
 
       - name: 创建 / 更新 Release
-        if: steps.up.outputs.skip != 'true'
+        if: steps.up.outputs.skip != 'true' && github.event.inputs.only == ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.up.outputs.tag }}
