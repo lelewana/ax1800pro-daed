@@ -1,0 +1,18 @@
+# 本地编译残留
+openwrt/
+bin/
+build_dir/
+staging_dir/
+tmp/
+dl/
+logs/
+out/
+build.log
+*.ipk
+*.apk
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
