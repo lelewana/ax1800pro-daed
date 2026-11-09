@@ -36,6 +36,21 @@ uci -q set system.@system[0].zonename='Asia/Shanghai'
 uci -q set system.ntp.enabled='1'
 uci -q set luci.main.lang='zh_cn'
 
+# --- 开机即启用 daed 面板（README 承诺 http://192.168.1.2:2023） ---
+# /etc/init.d/daed enable 只创建 rc.d 链接，不写 UCI，必须显式置 enabled=1
+uci -q set daed.config.enabled='1'
+
+# --- 旁路由不需要 WiFi：关闭首次启动自动生成的 FanchmWrt 开放 SSID ---
+i=0
+while uci -q get "wireless.@wifi-iface[$i]" >/dev/null 2>&1; do
+    uci -q set "wireless.@wifi-iface[$i].disabled=1"
+    i=$((i+1))
+done
+uci -q set wireless.@wifi-iface[0].disabled='1'
+
+# daed --config /etc/daed/ 需要目录存在
+mkdir -p /etc/daed /etc/dae
+
 # --- 旁路由网络：与主路由同网段，网关/DNS 指向主路由 ---
 uci -q set network.lan.proto='static'
 uci -q set network.lan.ipaddr='192.168.1.2'
@@ -73,7 +88,7 @@ cat > "$FILES_DIR/usr/sbin/set-lan-ip" <<'EOF'
 # 例：  set-lan-ip 192.168.31.2 192.168.31.1
 [ -z "$1" ] && { echo "用法: set-lan-ip <本机IP> [主路由网关]"; exit 1; }
 IP="$1"
-GW="${2:-$(echo "$IP" | awk -F. '{print $1"."$2"."$3".1"}')"
+GW="${2:-$(echo "$IP" | awk -F. '{print $1"."$2"."$3".1"}')}"
 
 uci set network.lan.proto='static'
 uci set network.lan.ipaddr="$IP"

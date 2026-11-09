@@ -55,7 +55,10 @@ jobs:
           SHORT=${SHA:0:7}
           echo "sha=$SHA"           >> "$GITHUB_OUTPUT"
           echo "short=$SHORT"       >> "$GITHUB_OUTPUT"
-          echo "tag=v$(date -u +%Y%m%d)-$SHORT" >> "$GITHUB_OUTPUT"
+          # 同一天针对同一上游多次重建时，追加本仓库提交短 SHA 生成独立 Release，
+          # 避免 gh release upload --clobber 覆盖上一版固件
+          CFG_SHORT=${GITHUB_SHA:0:7}
+          echo "tag=v$(date -u +%Y%m%d)-$SHORT-$CFG_SHORT" >> "$GITHUB_OUTPUT"
           echo "上游 $SOURCE_BRANCH = $SHA"
           SKIP=false
           if [ "${{ github.event_name }}" = "schedule" ]; then
@@ -228,6 +231,7 @@ jobs:
             echo "### 上游"
             echo "- 源码：\`fanchmwrt/fanchmwrt-snapshot\` @ \`fanchmwrt-26.11\`"
             echo "- 提交：\`$SHA\`"
+            echo "- 构建配置：\`${GITHUB_SHA:0:12}\`"
             echo "- 编译时间：$(date -u '+%Y-%m-%d %H:%M UTC')"
             if [ -n "${NOTE:-}" ]; then echo ""; echo "### 备注"; echo "$NOTE"; fi
           } > RELEASE_BODY.md
